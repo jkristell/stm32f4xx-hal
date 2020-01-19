@@ -25,7 +25,7 @@ use nb::block;
     feature = "stm32f469",
     feature = "stm32f479"
 ))]
-use crate::stm32::{RCC, USART1, USART2, USART6};
+use crate::stm32::{USART1, USART2, USART6};
 
 #[cfg(any(
     feature = "stm32f405",
@@ -415,7 +415,7 @@ use crate::gpio::{Alternate, AF7, AF8};
     feature = "stm32f423"
 ))]
 use crate::gpio::AF11;
-use crate::rcc::Clocks;
+use crate::rcc::{Rcc, Clocks};
 
 /// Serial error
 #[derive(Debug)]
@@ -1534,17 +1534,15 @@ macro_rules! halUsartImpl {
                     pins: PINS,
                     config: config::Config,
                     clocks: Clocks,
+                    rcc: &mut Rcc
                 ) -> Result<Self, config::InvalidConfig>
                 where
                     PINS: Pins<$USARTX>,
                 {
                     use self::config::*;
 
-                    // NOTE(unsafe) This executes only during initialisation
-                    let rcc = unsafe { &(*RCC::ptr()) };
-
                     // Enable clock for USART
-                    rcc.$apbXenr.modify(|_, w| w.$usartXen().set_bit());
+                    rcc.rb.$apbXenr.modify(|_, w| w.$usartXen().set_bit());
 
                     // Calculate correct baudrate divisor on the fly
                     let div = (clocks.$pclkX().0 + config.baudrate.0 / 2)

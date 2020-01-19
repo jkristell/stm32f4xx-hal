@@ -1,6 +1,6 @@
 //! # Quadrature Encoder Interface
 use crate::hal::{self, Direction};
-use crate::stm32::RCC;
+use crate::rcc::Rcc;
 
 use crate::gpio::gpioa::*;
 #[cfg(any(
@@ -794,15 +794,14 @@ macro_rules! hal {
         $(
             impl<PINS> Qei<$TIM, PINS> {
                 /// Configures a TIM peripheral as a quadrature encoder interface input
-                pub fn $tim(tim: $TIM, pins: PINS) -> Self
+                pub fn $tim(tim: $TIM, pins: PINS, rcc: &mut Rcc) -> Self
                 where
                     PINS: Pins<$TIM>
                 {
-                    let rcc = unsafe { &(*RCC::ptr()) };
                     // enable and reset peripheral to a clean slate state
-                    rcc.$apbenr.modify(|_, w| w.$timXen().set_bit());
-                    rcc.$apbrstr.modify(|_, w| w.$timXrst().set_bit());
-                    rcc.$apbrstr.modify(|_, w| w.$timXrst().clear_bit());
+                    rcc.rb.$apbenr.modify(|_, w| w.$timXen().set_bit());
+                    rcc.rb.$apbrstr.modify(|_, w| w.$timXrst().set_bit());
+                    rcc.rb.$apbrstr.modify(|_, w| w.$timXrst().clear_bit());
 
                     // Configure TxC1 and TxC2 as captures
                     tim.ccmr1_output()

@@ -46,9 +46,9 @@ fn main() -> ! {
     if let (Some(mut dp), Some(cp)) = (stm32::Peripherals::take(), cortex_m::Peripherals::take()) {
         dp.RCC.apb2enr.write(|w| w.syscfgen().enabled());
 
-        let rcc = dp.RCC.constrain();
-        let clocks = setup_clocks(rcc);
-        let gpiob = dp.GPIOB.split();
+        let mut rcc = dp.RCC.constrain();
+        let clocks = setup_clocks(&mut rcc);
+        let gpiob = dp.GPIOB.split(&mut rcc);
         let i2c = I2c::i2c1(
             dp.I2C1,
             (
@@ -57,10 +57,11 @@ fn main() -> ! {
             ),
             400.khz(),
             clocks,
+            &mut rcc
         );
 
         // Create a button input with an interrupt
-        let gpioc = dp.GPIOC.split();
+        let gpioc = dp.GPIOC.split(&mut rcc);
         let mut board_btn = gpioc.pc13.into_pull_up_input();
         board_btn.make_interrupt_source(&mut dp.SYSCFG);
         board_btn.enable_interrupt(&mut dp.EXTI);
@@ -71,7 +72,7 @@ fn main() -> ! {
         disp.flush().unwrap();
 
         // Create a 1ms periodic interrupt from TIM2
-        let mut timer = Timer::tim2(dp.TIM2, 1.khz(), clocks);
+        let mut timer = Timer::tim2(dp.TIM2, 1.khz(), clocks, &mut rcc);
         timer.listen(Event::TimeOut);
 
         free(|cs| {
@@ -162,7 +163,7 @@ fn EXTI15_10() {
     });
 }
 
-fn setup_clocks(rcc: Rcc) -> Clocks {
+fn setup_clocks(rcc: &mut Rcc) -> Clocks {
     return rcc
         .cfgr
         .hclk(48.mhz())

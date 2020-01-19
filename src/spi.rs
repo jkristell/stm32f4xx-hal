@@ -24,7 +24,7 @@ use nb;
     feature = "stm32f469",
     feature = "stm32f479"
 ))]
-use crate::stm32::{spi1, SPI1, SPI2, RCC};
+use crate::stm32::{spi1, SPI1, SPI2};
 
 #[cfg(any(
     feature = "stm32f401",
@@ -352,7 +352,7 @@ use crate::gpio::AF7;
 ))]
 use crate::gpio::{Alternate, AF5, AF6};
 
-use crate::rcc::Clocks;
+use crate::rcc::{Clocks, Rcc};
 use crate::time::Hertz;
 
 /// SPI error
@@ -742,15 +742,12 @@ pub struct Spi<SPI, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> Spi<SPI1, PINS> {
-    pub fn spi1(spi: SPI1, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
+    pub fn spi1(spi: SPI1, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<SPI1>
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for SPI
-        rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
+        rcc.rb.apb2enr.modify(|_, w| w.spi1en().set_bit());
 
         Spi { spi, pins }.init(mode, freq, clocks.pclk2())
     }
@@ -776,15 +773,12 @@ impl<PINS> Spi<SPI1, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> Spi<SPI2, PINS> {
-    pub fn spi2(spi: SPI2, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
+    pub fn spi2(spi: SPI2, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<SPI2>
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for SPI
-        rcc.apb1enr.modify(|_, w| w.spi2en().set_bit());
+        rcc.rb.apb1enr.modify(|_, w| w.spi2en().set_bit());
 
         Spi { spi, pins }.init(mode, freq, clocks.pclk1())
     }
@@ -809,15 +803,12 @@ impl<PINS> Spi<SPI2, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> Spi<SPI3, PINS> {
-    pub fn spi3(spi: SPI3, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
+    pub fn spi3(spi: SPI3, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<SPI3>
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for SPI
-        rcc.apb1enr.modify(|_, w| w.spi3en().set_bit());
+        rcc.rb.apb1enr.modify(|_, w| w.spi3en().set_bit());
 
         Spi { spi, pins }.init(mode, freq, clocks.pclk1())
     }
@@ -838,15 +829,12 @@ impl<PINS> Spi<SPI3, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> Spi<SPI4, PINS> {
-    pub fn spi4(spi: SPI4, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
+    pub fn spi4(spi: SPI4, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<SPI4>
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for SPI
-        rcc.apb2enr.modify(|_, w| w.spi4en().set_bit());
+        rcc.rb.apb2enr.modify(|_, w| w.spi4en().set_bit());
 
         Spi { spi, pins }.init(mode, freq, clocks.pclk2())
     }
@@ -866,15 +854,12 @@ impl<PINS> Spi<SPI4, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> Spi<SPI5, PINS> {
-    pub fn spi5(spi: SPI5, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
+    pub fn spi5(spi: SPI5, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<SPI5>
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for SPI
-        rcc.apb2enr.modify(|_, w| w.spi5en().set_bit());
+        rcc.rb.apb2enr.modify(|_, w| w.spi5en().set_bit());
 
         Spi { spi, pins }.init(mode, freq, clocks.pclk2())
     }
@@ -889,15 +874,12 @@ impl<PINS> Spi<SPI5, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> Spi<SPI6, PINS> {
-    pub fn spi6(spi: SPI6, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
+    pub fn spi6(spi: SPI6, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<SPI6>
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for SPI
-        rcc.apb2enr.modify(|_, w| w.spi6en().set_bit());
+        rcc.rb.apb2enr.modify(|_, w| w.spi6en().set_bit());
 
         Spi { spi, pins }.init(mode, freq, clocks.pclk2())
     }

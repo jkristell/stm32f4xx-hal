@@ -1,6 +1,7 @@
 use core::ops::Deref;
 
 use crate::stm32::i2c1;
+use crate::rcc::Rcc;
 
 #[cfg(any(
     feature = "stm32f401",
@@ -21,7 +22,7 @@ use crate::stm32::i2c1;
     feature = "stm32f469",
     feature = "stm32f479"
 ))]
-use crate::stm32::{I2C1, I2C2, RCC};
+use crate::stm32::{I2C1, I2C2};
 #[cfg(any(
     feature = "stm32f401",
     feature = "stm32f405",
@@ -525,19 +526,16 @@ pub enum Error {
     feature = "stm32f479"
 ))]
 impl<PINS> I2c<I2C1, PINS> {
-    pub fn i2c1(i2c: I2C1, pins: PINS, speed: KiloHertz, clocks: Clocks) -> Self
+    pub fn i2c1(i2c: I2C1, pins: PINS, speed: KiloHertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<I2C1>,
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for I2C1
-        rcc.apb1enr.modify(|_, w| w.i2c1en().set_bit());
+        rcc.rb.apb1enr.modify(|_, w| w.i2c1en().set_bit());
 
         // Reset I2C1
-        rcc.apb1rstr.modify(|_, w| w.i2c1rst().set_bit());
-        rcc.apb1rstr.modify(|_, w| w.i2c1rst().clear_bit());
+        rcc.rb.apb1rstr.modify(|_, w| w.i2c1rst().set_bit());
+        rcc.rb.apb1rstr.modify(|_, w| w.i2c1rst().clear_bit());
 
         let i2c = I2c { i2c, pins };
         i2c.i2c_init(speed, clocks.pclk1());
@@ -565,19 +563,18 @@ impl<PINS> I2c<I2C1, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> I2c<I2C2, PINS> {
-    pub fn i2c2(i2c: I2C2, pins: PINS, speed: KiloHertz, clocks: Clocks) -> Self
+    pub fn i2c2(i2c: I2C2, pins: PINS, speed: KiloHertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<I2C2>,
     {
         // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
 
         // Enable clock for I2C2
-        rcc.apb1enr.modify(|_, w| w.i2c2en().set_bit());
+        rcc.rb.apb1enr.modify(|_, w| w.i2c2en().set_bit());
 
         // Reset I2C2
-        rcc.apb1rstr.modify(|_, w| w.i2c2rst().set_bit());
-        rcc.apb1rstr.modify(|_, w| w.i2c2rst().clear_bit());
+        rcc.rb.apb1rstr.modify(|_, w| w.i2c2rst().set_bit());
+        rcc.rb.apb1rstr.modify(|_, w| w.i2c2rst().clear_bit());
 
         let i2c = I2c { i2c, pins };
         i2c.i2c_init(speed, clocks.pclk1());
@@ -604,19 +601,16 @@ impl<PINS> I2c<I2C2, PINS> {
     feature = "stm32f479"
 ))]
 impl<PINS> I2c<I2C3, PINS> {
-    pub fn i2c3(i2c: I2C3, pins: PINS, speed: KiloHertz, clocks: Clocks) -> Self
+    pub fn i2c3(i2c: I2C3, pins: PINS, speed: KiloHertz, clocks: Clocks, rcc: &mut Rcc) -> Self
     where
         PINS: Pins<I2C3>,
     {
-        // NOTE(unsafe) This executes only during initialisation
-        let rcc = unsafe { &(*RCC::ptr()) };
-
         // Enable clock for I2C3
-        rcc.apb1enr.modify(|_, w| w.i2c3en().set_bit());
+        rcc.rb.apb1enr.modify(|_, w| w.i2c3en().set_bit());
 
         // Reset I2C3
-        rcc.apb1rstr.modify(|_, w| w.i2c3rst().set_bit());
-        rcc.apb1rstr.modify(|_, w| w.i2c3rst().clear_bit());
+        rcc.rb.apb1rstr.modify(|_, w| w.i2c3rst().set_bit());
+        rcc.rb.apb1rstr.modify(|_, w| w.i2c3rst().clear_bit());
 
         let i2c = I2c { i2c, pins };
         i2c.i2c_init(speed, clocks.pclk1());

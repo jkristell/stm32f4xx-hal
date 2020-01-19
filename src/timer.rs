@@ -7,7 +7,6 @@ use embedded_hal::timer::{CountDown, Periodic};
 use nb;
 use void::Void;
 
-use crate::stm32::RCC;
 #[cfg(any(
     feature = "stm32f405",
     feature = "stm32f407",
@@ -83,7 +82,7 @@ use crate::stm32::{TIM10, TIM2, TIM3, TIM4};
 ))]
 use crate::stm32::{TIM12, TIM13, TIM14, TIM7, TIM8};
 
-use crate::rcc::Clocks;
+use crate::rcc::{Clocks, Rcc};
 use crate::time::Hertz;
 
 /// Hardware timers
@@ -157,15 +156,14 @@ macro_rules! hal {
         $(
             impl Timer<$TIM> {
                 /// Configures a TIM peripheral as a periodic count down timer
-                pub fn $tim<T>(tim: $TIM, timeout: T, clocks: Clocks) -> Self
+                pub fn $tim<T>(tim: $TIM, timeout: T, clocks: Clocks, rcc: &mut Rcc) -> Self
                 where
                     T: Into<Hertz>,
                 {
                     // enable and reset peripheral to a clean slate state
-                    let rcc = unsafe { &(*RCC::ptr()) };
-                    rcc.$apbenr.modify(|_, w| w.$timXen().set_bit());
-                    rcc.$apbrstr.modify(|_, w| w.$timXrst().set_bit());
-                    rcc.$apbrstr.modify(|_, w| w.$timXrst().clear_bit());
+                    rcc.rb.$apbenr.modify(|_, w| w.$timXen().set_bit());
+                    rcc.rb.$apbrstr.modify(|_, w| w.$timXrst().set_bit());
+                    rcc.rb.$apbrstr.modify(|_, w| w.$timXrst().clear_bit());
 
                     let mut timer = Timer {
                         clocks,

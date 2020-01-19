@@ -3,6 +3,7 @@
 use core::marker::PhantomData;
 
 use crate::stm32::{EXTI, SYSCFG};
+use crate::rcc::Rcc;
 
 /// Extension trait to split a GPIO peripheral in independent pins and registers
 pub trait GpioExt {
@@ -10,7 +11,7 @@ pub trait GpioExt {
     type Parts;
 
     /// Splits the GPIO block into independent pins and registers
-    fn split(self) -> Self::Parts;
+    fn split(self, rcc: &mut Rcc) -> Self::Parts;
 }
 
 pub struct AF0;
@@ -98,7 +99,8 @@ macro_rules! gpio {
             use embedded_hal::digital::v2::{InputPin, OutputPin, StatefulOutputPin, toggleable};
             use crate::stm32::$GPIOX;
 
-            use crate::stm32::{RCC, EXTI, SYSCFG};
+            use crate::stm32::{EXTI, SYSCFG};
+            use crate::rcc::Rcc;
             use super::{
                 Alternate, Floating, GpioExt, Input, OpenDrain, Output, Speed,
                 PullDown, PullUp, PushPull, AF0, AF1, AF2, AF3, AF4, AF5, AF6, AF7, AF8, AF9, AF10,
@@ -116,10 +118,8 @@ macro_rules! gpio {
             impl GpioExt for $GPIOX {
                 type Parts = Parts;
 
-                fn split(self) -> Parts {
-                    // NOTE(unsafe) This executes only during initialisation
-                    let rcc = unsafe { &(*RCC::ptr()) };
-                    rcc.ahb1enr.modify(|_, w| w.$iopxenr().set_bit());
+                fn split(self, rcc: &mut Rcc) -> Parts {
+                    rcc.rb.ahb1enr.modify(|_, w| w.$iopxenr().set_bit());
 
                     Parts {
                         $(

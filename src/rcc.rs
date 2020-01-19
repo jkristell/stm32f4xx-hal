@@ -19,6 +19,7 @@ impl RccExt for RCC {
                 pclk2: None,
                 sysclk: None,
             },
+            rb: self,
         }
     }
 }
@@ -26,10 +27,12 @@ impl RccExt for RCC {
 /// Constrained RCC peripheral
 pub struct Rcc {
     pub cfgr: CFGR,
+    pub(crate) rb: RCC,
 }
 
 const HSI: u32 = 16_000_000; // Hz
 
+#[derive(Copy, Clone)]
 pub struct CFGR {
     hse: Option<u32>,
     hclk: Option<u32>,
