@@ -350,34 +350,18 @@ impl Sdio {
     pub fn read_block(&mut self, addr: u32, buf: &mut [u8]) -> Result<(), Error> {
         let _card = self.card()?;
 
-        self.cmd(Cmd::set_blocklen(512))?;
 
-        // Setup read command
-        self.sdio
-            .dtimer
-            .write(|w| unsafe { w.datatime().bits(0xFFFF_FFFF) });
-        self.sdio
-            .dlen
-            .write(|w| unsafe { w.datalength().bits(512) });
-        self.sdio.dctrl.write(|w| unsafe {
-            w.dblocksize()
-                .bits(9) //512
-                .dtdir()
-                .set_bit()
-                .dten()
-                .set_bit()
-        });
+        self.start_datapath_transfer(512, 9, true);
+
+        self.cmd(Cmd::set_blocklen(512))?;
         self.cmd(Cmd::read_single_block(addr))?;
 
         let mut i = 0;
         let mut sta;
+
         while {
             sta = self.sdio.sta.read();
-            !(sta.rxoverr().bit()
-                || sta.dcrcfail().bit()
-                || sta.dtimeout().bit()
-                || sta.dataend().bit()
-                || sta.stbiterr().bit())
+            sta.rxact().bit_is_set()
         } {
             if sta.rxfifohf().bit() {
                 for _ in 0..8 {
@@ -407,34 +391,17 @@ impl Sdio {
     pub fn write_block(&mut self, addr: u32, buf: &[u8]) -> Result<(), Error> {
         let _card = self.card()?;
 
-        self.cmd(Cmd::set_blocklen(512))?;
+        self.start_datapath_transfer(512, 9, false);
 
-        // Setup write command
-        self.sdio
-            .dtimer
-            .write(|w| unsafe { w.datatime().bits(0xFFFF_FFFF) });
-        self.sdio
-            .dlen
-            .write(|w| unsafe { w.datalength().bits(512) });
-        self.sdio.dctrl.write(|w| unsafe {
-            w.dblocksize()
-                .bits(9) //512
-                .dtdir()
-                .clear_bit()
-                .dten()
-                .set_bit()
-        });
+        self.cmd(Cmd::set_blocklen(512))?;
         self.cmd(Cmd::write_single_block(addr))?;
 
         let mut i = 0;
         let mut sta;
+
         while {
             sta = self.sdio.sta.read();
-            !(sta.txunderr().bit()
-                || sta.dcrcfail().bit()
-                || sta.dtimeout().bit()
-                || sta.dataend().bit()
-                || sta.stbiterr().bit())
+            sta.txact().bit_is_set()
         } {
             if sta.txfifohe().bit() {
                 for _ in 0..8 {
@@ -462,22 +429,44 @@ impl Sdio {
         Ok(())
     }
 
-    fn read_card_status(&mut self, card: &mut Card) -> Result<(), Error> {
-        self.cmd(Cmd::set_blocklen(64))?;
+    // Start a transfer
+    // dtdir:
+    // true: for card to host
+    // false: host to card
+    // Note: Once the new stm32 is released we can switch to the datatypes from pac
+    fn start_datapath_transfer(&self, length_bytes: u32, block_size: u8, dtdir: bool) {
+        // Block Size up to 2^14 bytes
+        assert!(block_size <= 14);
 
-        // Prepare the transfer
+        // Command AND Data state machines must be idle
+        while self.sdio.sta.read().cmdact().bit_is_set()
+            || self.sdio.sta.read().rxact().bit_is_set()
+            || self.sdio.sta.read().txact().bit_is_set()
+        {}
+
+        // Data timeout, in bus cycles
         self.sdio
             .dtimer
             .write(|w| unsafe { w.datatime().bits(0xFFFF_FFFF) });
-        self.sdio.dlen.write(|w| unsafe { w.datalength().bits(64) });
+        // Data length, in bytes
+        self.sdio
+            .dlen
+            .write(|w| unsafe { w.datalength().bits(length_bytes) });
+        // Transfer
         self.sdio.dctrl.write(|w| unsafe {
             w.dblocksize()
-                .bits(6) // 64
+                .bits(block_size) // 2^n bytes block size
                 .dtdir()
-                .set_bit()
+                .bit(dtdir)
                 .dten()
-                .set_bit()
+                .set_bit() // Enable transfer
         });
+    }
+
+    fn read_card_status(&mut self, card: &mut Card) -> Result<(), Error> {
+        self.cmd(Cmd::set_blocklen(64))?;
+
+        self.start_datapath_transfer(64, 6, true);
 
         self.cmd(Cmd::app_cmd(card.rca.0))?;
         self.cmd(Cmd::send_card_status())?;
@@ -485,12 +474,10 @@ impl Sdio {
         let status = &mut card.status.0;
         let mut idx = 0;
         let mut sta;
+
         while {
             sta = self.sdio.sta.read();
-            !(sta.rxoverr().bit()
-                || sta.dcrcfail().bit()
-                || sta.dtimeout().bit()
-                || sta.dbckend().bit())
+            sta.rxact().bit_is_set()
         } {
             if sta.rxfifohf().bit() {
                 for _ in 0..8 {
@@ -528,13 +515,7 @@ impl Sdio {
     fn get_scr(&self, card: &mut Card) -> Result<(), Error> {
         self.cmd(Cmd::set_blocklen(8))?;
 
-        self.sdio
-            .dtimer
-            .write(|w| unsafe { w.datatime().bits(0xFFFF_FFFF) });
-        self.sdio.dlen.write(|w| unsafe { w.datalength().bits(8) });
-        self.sdio
-            .dctrl
-            .write(|w| unsafe { w.dblocksize().bits(3).dtdir().set_bit().dten().set_bit() });
+        self.start_datapath_transfer(8, 3, true);
 
         self.cmd(Cmd::app_cmd(card.rca.0))?;
         self.cmd(Cmd::cmd51())?;
@@ -542,13 +523,10 @@ impl Sdio {
         let mut buf = [0; 2];
         let mut i = 0;
         let mut sta;
+
         while {
             sta = self.sdio.sta.read();
-
-            !(sta.rxoverr().bit()
-                || sta.dcrcfail().bit()
-                || sta.dtimeout().bit()
-                || sta.dbckend().bit())
+            sta.rxact().bit_is_set()
         } {
             if sta.rxdavl().bit() {
                 buf[i] = self.sdio.fifo.read().bits();
@@ -600,6 +578,9 @@ impl Sdio {
 
     /// Send command to card
     fn cmd(&self, cmd: Cmd) -> Result<(), Error> {
+        // Command state machines must be idle
+        while self.sdio.sta.read().cmdact().bit_is_set() {}
+
         // Clear interrupts
         self.sdio.icr.modify(|_, w| {
             w.ccrcfailc()
@@ -651,14 +632,17 @@ impl Sdio {
             // Wait for command sent or a timeout
             while {
                 sta = self.sdio.sta.read();
-                !(sta.ctimeout().bit() || sta.cmdsent().bit()) && timeout > 0
+
+                (!(sta.ctimeout().bit() || sta.cmdsent().bit()) || sta.cmdact().bit_is_set())
+                    && timeout > 0
             } {
                 timeout -= 1;
             }
         } else {
             while {
                 sta = self.sdio.sta.read();
-                !(sta.ctimeout().bit() || sta.cmdrend().bit() || sta.ccrcfail().bit())
+                (!(sta.ctimeout().bit() || sta.cmdrend().bit() || sta.ccrcfail().bit())
+                    || sta.cmdact().bit_is_set())
                     && timeout > 0
             } {
                 timeout -= 1;
