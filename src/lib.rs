@@ -152,8 +152,8 @@ pub mod rng;
 #[cfg(feature = "device-selected")]
 pub use stm32 as pac;
 
-#[cfg(feature = "device-selected")]
-pub mod dma;
+//#[cfg(feature = "device-selected")]
+//pub mod dma;
 #[cfg(feature = "device-selected")]
 pub mod dwt;
 #[cfg(feature = "device-selected")]
@@ -166,11 +166,11 @@ pub mod qei;
 pub mod rcc;
 #[cfg(all(
     feature = "sdio",
-    not(any(feature = "stm32f410", feature = "stm32f446",))
+    not(any(feature = "stm32f410"))
 ))]
 pub mod sdio;
-#[cfg(feature = "device-selected")]
-pub mod serial;
+//#[cfg(feature = "device-selected")]
+//pub mod serial;
 #[cfg(feature = "device-selected")]
 pub mod signature;
 #[cfg(feature = "device-selected")]

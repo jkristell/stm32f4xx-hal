@@ -4,7 +4,7 @@ use crate::bb;
 #[allow(unused_imports)]
 use crate::gpio::{gpioa::*, gpiob::*, gpioc::*, gpiod::*, Alternate, AF12};
 use crate::rcc::Clocks;
-use crate::stm32::{self, RCC, SDIO};
+use crate::stm32::{self, RCC, SDIO, sdio::cmd::WAITRESP_A};
 pub use sdio_host::{
     cmd, cmd::ResponseLen, CardCapacity, CardStatus, Cmd, CurrentState, SDStatus, CIC, CID, CSD,
     OCR, RCA, SCR,
@@ -397,20 +397,19 @@ impl Sdio {
         // Data timeout, in bus cycles
         self.sdio
             .dtimer
-            .write(|w| unsafe { w.datatime().bits(0xFFFF_FFFF) });
+            .write(|w| w.datatime().bits(0xFFFF_FFFF));
         // Data length, in bytes
         self.sdio
             .dlen
-            .write(|w| unsafe { w.datalength().bits(length_bytes) });
+            .write(|w| w.datalength().bits(length_bytes));
         // Transfer
-        self.sdio.dctrl.write(|w| unsafe {
+        self.sdio.dctrl.write(|w|
             w.dblocksize()
                 .bits(block_size) // 2^n bytes block size
                 .dtdir()
                 .bit(dtdir)
-                .dten()
-                .set_bit() // Enable transfer
-        });
+                .dten().enabled() // Enable transfer
+        );
     }
 
     /// Read the state bits of the status
@@ -534,26 +533,23 @@ impl Sdio {
         clear_all_interrupts(&self.sdio.icr);
 
         // Command arg
-        self.sdio.arg.write(|w| unsafe { w.cmdarg().bits(cmd.arg) });
+        self.sdio.arg.write(|w| w.cmdarg().bits(cmd.arg));
 
         // Determine what kind of response the CPSM should wait for
         let waitresp = match cmd.response_len() {
-            ResponseLen::Zero => 0b00,
-            ResponseLen::R48 => 0b01,
-            ResponseLen::R136 => 0b11,
+            ResponseLen::Zero => WAITRESP_A::NORESPONSE,
+            ResponseLen::R48 => WAITRESP_A::SHORTRESPONSE,
+            ResponseLen::R136 => WAITRESP_A::LONGRESPONSE,
         };
 
         // Send the command
-        self.sdio.cmd.write(|w| unsafe {
-            w.waitresp()
-                .bits(waitresp)
+        self.sdio.cmd.write(|w|
+            w.waitresp().variant(waitresp)
                 .cmdindex()
                 .bits(cmd.cmd)
-                .waitint()
-                .clear_bit()
-                .cpsmen()
-                .set_bit()
-        });
+                .waitint().disabled()
+                .cpsmen().enabled()
+        );
 
         let mut timeout: u32 = 0xFFFF_FFFF;
 
