@@ -4,7 +4,11 @@ use crate::bb;
 #[allow(unused_imports)]
 use crate::gpio::{gpioa::*, gpiob::*, gpioc::*, gpiod::*, Alternate, AF12};
 use crate::rcc::Clocks;
-use crate::stm32::{self, RCC, SDIO};
+use crate::stm32::{
+    self,
+    sdio::{clkcr::WIDBUS_A, power::PWRCTRL_A},
+    RCC, SDIO,
+};
 pub use sdio_host::{
     cmd, cmd::ResponseLen, CardCapacity, CardStatus, Cmd, CurrentState, SDStatus, CIC, CID, CSD,
     OCR, RCA, SCR,
@@ -120,11 +124,6 @@ pub enum Buswidth {
     Buswidth4 = 1,
 }
 
-enum PowerCtrl {
-    Off = 0b00,
-    On = 0b11,
-}
-
 /// Clock frequency of a SDIO bus.
 pub enum ClockFreq {
     F24Mhz = 0,
@@ -185,9 +184,9 @@ impl Sdio {
         }
 
         // Configure clock
-        sdio.clkcr.write(|w| unsafe {
+        sdio.clkcr.write(|w| {
             w.widbus()
-                .bits(Buswidth::Buswidth1 as u8)
+                .bus_width1()
                 .clken()
                 .set_bit()
                 .clkdiv()
@@ -210,14 +209,14 @@ impl Sdio {
         };
 
         // Make sure card is powered off
-        host.set_power(PowerCtrl::Off);
+        host.set_power(false);
         host
     }
 
     /// Initializes card (if present) and sets the bus at the specified frequency.
     pub fn init_card(&mut self, freq: ClockFreq) -> Result<(), Error> {
         // Enable power to card
-        self.set_power(PowerCtrl::On);
+        self.set_power(true);
 
         // Enable clock
         self.sdio.clkcr.modify(|_, w| w.clken().set_bit());
@@ -307,10 +306,14 @@ impl Sdio {
         Ok(())
     }
 
-    fn set_power(&mut self, pwr: PowerCtrl) {
-        self.sdio
-            .power
-            .modify(|_, w| unsafe { w.pwrctrl().bits(pwr as u8) });
+    fn set_power(&mut self, enable: bool) {
+        self.sdio.power.modify(|_, w| {
+            w.pwrctrl().variant(if enable {
+                PWRCTRL_A::POWERON
+            } else {
+                PWRCTRL_A::POWEROFF
+            })
+        });
 
         // Wait for 2 ms after changing power settings
         cortex_m::asm::delay(2 * (self.clocks.sysclk().0 / 1000));
@@ -418,15 +421,11 @@ impl Sdio {
         {}
 
         // Data timeout, in bus cycles
-        self.sdio
-            .dtimer
-            .write(|w| unsafe { w.datatime().bits(0xFFFF_FFFF) });
+        self.sdio.dtimer.write(|w| w.datatime().bits(0xFFFF_FFFF));
         // Data length, in bytes
-        self.sdio
-            .dlen
-            .write(|w| unsafe { w.datalength().bits(length_bytes) });
+        self.sdio.dlen.write(|w| w.datalength().bits(length_bytes));
         // Transfer
-        self.sdio.dctrl.write(|w| unsafe {
+        self.sdio.dctrl.write(|w| {
             w.dblocksize()
                 .bits(block_size) // 2^n bytes block size
                 .dtdir()
@@ -525,17 +524,17 @@ impl Sdio {
         let card_widebus = self.card()?.supports_widebus();
 
         let width = match width {
-            Buswidth::Buswidth4 if card_widebus => Buswidth::Buswidth4,
-            _ => Buswidth::Buswidth1,
+            Buswidth::Buswidth4 if card_widebus => WIDBUS_A::BUSWIDTH4,
+            _ => WIDBUS_A::BUSWIDTH1,
         };
 
-        self.app_cmd(cmd::set_bus_width(width == Buswidth::Buswidth4))?;
+        self.app_cmd(cmd::set_bus_width(width == WIDBUS_A::BUSWIDTH4))?;
 
-        self.sdio.clkcr.modify(|_, w| unsafe {
+        self.sdio.clkcr.modify(|_, w| {
             w.clkdiv()
                 .bits(freq as u8)
                 .widbus()
-                .bits(width as u8)
+                .variant(width)
                 .clken()
                 .set_bit()
         });
@@ -557,7 +556,7 @@ impl Sdio {
         clear_all_interrupts(&self.sdio.icr);
 
         // Command arg
-        self.sdio.arg.write(|w| unsafe { w.cmdarg().bits(cmd.arg) });
+        self.sdio.arg.write(|w| w.cmdarg().bits(cmd.arg));
 
         // Determine what kind of response the CPSM should wait for
         let waitresp = match cmd.response_len() {
@@ -567,7 +566,7 @@ impl Sdio {
         };
 
         // Send the command
-        self.sdio.cmd.write(|w| unsafe {
+        self.sdio.cmd.write(|w| {
             w.waitresp()
                 .bits(waitresp)
                 .cmdindex()
