@@ -6,7 +6,7 @@ use crate::gpio::{gpioa::*, gpiob::*, gpioc::*, gpiod::*, Alternate, AF12};
 use crate::rcc::Clocks;
 use crate::stm32::{
     self,
-    sdio::{clkcr::WIDBUS_A, power::PWRCTRL_A},
+    sdio::{clkcr::WIDBUS_A, cmd::WAITRESP_A, dctrl::DTDIR_A, power::PWRCTRL_A},
     RCC, SDIO,
 };
 pub use sdio_host::{
@@ -188,17 +188,17 @@ impl Sdio {
             w.widbus()
                 .bus_width1()
                 .clken()
-                .set_bit()
+                .enabled()
                 .clkdiv()
                 .bits(ClockFreq::F400Khz as u8)
                 .pwrsav()
-                .clear_bit()
+                .disabled()
                 .bypass()
-                .clear_bit()
+                .disabled()
                 .negedge()
-                .clear_bit()
+                .rising()
                 .hwfc_en()
-                .set_bit()
+                .enabled()
         });
 
         let mut host = Sdio {
@@ -209,17 +209,17 @@ impl Sdio {
         };
 
         // Make sure card is powered off
-        host.set_power(false);
+        host.power_card(false);
         host
     }
 
     /// Initializes card (if present) and sets the bus at the specified frequency.
     pub fn init_card(&mut self, freq: ClockFreq) -> Result<(), Error> {
         // Enable power to card
-        self.set_power(true);
+        self.power_card(true);
 
         // Enable clock
-        self.sdio.clkcr.modify(|_, w| w.clken().set_bit());
+        self.sdio.clkcr.modify(|_, w| w.clken().enabled());
         // Send card to idle state
         self.cmd(cmd::idle())?;
 
@@ -306,7 +306,7 @@ impl Sdio {
         Ok(())
     }
 
-    fn set_power(&mut self, enable: bool) {
+    fn power_card(&mut self, enable: bool) {
         self.sdio.power.modify(|_, w| {
             w.pwrctrl().variant(if enable {
                 PWRCTRL_A::POWERON
@@ -420,6 +420,12 @@ impl Sdio {
             || self.sdio.sta.read().txact().bit_is_set()
         {}
 
+        let direction = if dtdir {
+            DTDIR_A::CARDTOCONTROLLER
+        } else {
+            DTDIR_A::CONTROLLERTOCARD
+        };
+
         // Data timeout, in bus cycles
         self.sdio.dtimer.write(|w| w.datatime().bits(0xFFFF_FFFF));
         // Data length, in bytes
@@ -429,9 +435,9 @@ impl Sdio {
             w.dblocksize()
                 .bits(block_size) // 2^n bytes block size
                 .dtdir()
-                .bit(dtdir)
+                .variant(direction)
                 .dten()
-                .set_bit() // Enable transfer
+                .enabled() // Enable transfer
         });
     }
 
@@ -536,7 +542,7 @@ impl Sdio {
                 .widbus()
                 .variant(width)
                 .clken()
-                .set_bit()
+                .enabled()
         });
         Ok(())
     }
@@ -560,21 +566,21 @@ impl Sdio {
 
         // Determine what kind of response the CPSM should wait for
         let waitresp = match cmd.response_len() {
-            ResponseLen::Zero => 0b00,
-            ResponseLen::R48 => 0b01,
-            ResponseLen::R136 => 0b11,
+            ResponseLen::Zero => WAITRESP_A::NORESPONSE,
+            ResponseLen::R48 => WAITRESP_A::SHORTRESPONSE,
+            ResponseLen::R136 => WAITRESP_A::LONGRESPONSE,
         };
 
         // Send the command
         self.sdio.cmd.write(|w| {
             w.waitresp()
-                .bits(waitresp)
+                .variant(waitresp)
                 .cmdindex()
                 .bits(cmd.cmd)
                 .waitint()
-                .clear_bit()
+                .disabled()
                 .cpsmen()
-                .set_bit()
+                .enabled()
         });
 
         let mut timeout: u32 = 0xFFFF_FFFF;
