@@ -4,11 +4,7 @@ use crate::bb;
 #[allow(unused_imports)]
 use crate::gpio::{gpioa::*, gpiob::*, gpioc::*, gpiod::*, Alternate, AF12};
 use crate::rcc::Clocks;
-use crate::stm32::{
-    self,
-    sdio::{clkcr::WIDBUS_A, cmd::WAITRESP_A, dctrl::DTDIR_A, power::PWRCTRL_A},
-    RCC, SDIO,
-};
+use crate::stm32::{self, RCC, SDIO};
 pub use sdio_host::{
     cmd, cmd::ResponseLen, CardCapacity, CardStatus, Cmd, CurrentState, SDStatus, CIC, CID, CSD,
     OCR, RCA, SCR,
@@ -306,9 +302,11 @@ impl Sdio {
         Ok(())
     }
 
-    fn power_card(&mut self, enable: bool) {
+    fn power_card(&mut self, on: bool) {
+        use crate::stm32::sdio::power::PWRCTRL_A;
+
         self.sdio.power.modify(|_, w| {
-            w.pwrctrl().variant(if enable {
+            w.pwrctrl().variant(if on {
                 PWRCTRL_A::POWERON
             } else {
                 PWRCTRL_A::POWEROFF
@@ -410,7 +408,9 @@ impl Sdio {
         Ok(())
     }
 
-    fn start_datapath_transfer(&self, length_bytes: u32, block_size: u8, dtdir: bool) {
+    fn start_datapath_transfer(&self, length_bytes: u32, block_size: u8, card_to_controller: bool) {
+        use crate::stm32::sdio::dctrl::DTDIR_A;
+
         // Block Size up to 2^14 bytes
         assert!(block_size <= 14);
 
@@ -420,7 +420,7 @@ impl Sdio {
             || self.sdio.sta.read().txact().bit_is_set()
         {}
 
-        let direction = if dtdir {
+        let dtdir = if card_to_controller {
             DTDIR_A::CARDTOCONTROLLER
         } else {
             DTDIR_A::CONTROLLERTOCARD
@@ -435,7 +435,7 @@ impl Sdio {
             w.dblocksize()
                 .bits(block_size) // 2^n bytes block size
                 .dtdir()
-                .variant(direction)
+                .variant(dtdir)
                 .dten()
                 .enabled() // Enable transfer
         });
@@ -527,6 +527,8 @@ impl Sdio {
 
     /// Set bus width and clock frequency
     fn set_bus(&self, width: Buswidth, freq: ClockFreq) -> Result<(), Error> {
+        use crate::stm32::sdio::clkcr::WIDBUS_A;
+
         let card_widebus = self.card()?.supports_widebus();
 
         let width = match width {
@@ -555,6 +557,8 @@ impl Sdio {
 
     /// Send command to card
     fn cmd<R: cmd::Resp>(&self, cmd: Cmd<R>) -> Result<(), Error> {
+        use crate::stm32::sdio::cmd::WAITRESP_A;
+
         // Command state machines must be idle
         while self.sdio.sta.read().cmdact().bit_is_set() {}
 
